@@ -1,0 +1,112 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score
+from tkinter import *
+import joblib
+
+# Load the dataset
+data = pd.read_csv('diabetes.csv')
+
+# Impute missing values in certain columns
+data_copy = data.copy(deep=True)
+data_copy[['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']] = data_copy[
+    ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+].replace(0, np.nan)
+
+imputer = SimpleImputer(strategy='mean')
+data_imputed = pd.DataFrame(imputer.fit_transform(data_copy), columns=data_copy.columns)
+
+# Split the data into features (X) and target variable (y)
+X = data_imputed.drop('Outcome', axis=1)
+y = data_imputed['Outcome']
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+
+# Define pipelines for different classifiers
+pipelines = {
+    'LR': Pipeline([('scalar', StandardScaler()), ('lr_classifier', LogisticRegression())]),
+    'KNN': Pipeline([('scalar', StandardScaler()), ('knn_classifier', KNeighborsClassifier())]),
+    'SVC': Pipeline([('scalar', StandardScaler()), ('svc_classifier', SVC())]),
+    'DT': Pipeline([('dt_classifier', DecisionTreeClassifier())]),
+    'RF': Pipeline([('imputer', SimpleImputer(strategy='mean')), ('rf_classifier', RandomForestClassifier(max_depth=3))]),
+    'GBC': Pipeline([('gbc_classifier', GradientBoostingClassifier())])
+}
+
+# Train and evaluate each classifier in the pipeline
+for name, pipeline in pipelines.items():
+    pipeline.fit(X_train, y_train)
+    y_pred = pipeline.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"{name} Test Accuracy: {accuracy * 100:.2f}%")
+
+# Train RandomForestClassifier using the pipeline on the entire dataset
+rf_pipeline = pipelines['RF']
+rf_pipeline.fit(X, y)
+
+# Save the RandomForestClassifier model
+joblib.dump(rf_pipeline, 'model_joblib_diabetes')
+
+# GUI for prediction and displaying precautions
+def show_entry_fields():
+    inputs = [float(entry.get()) for entry in entries]
+    model = joblib.load('model_joblib_diabetes')
+    result = model.predict([inputs])
+
+    if result == 0:
+        Label(master, text="Non-Diabetic").grid(row=31)
+
+        # Display precautions for non-diabetic individuals
+        precautions_non_diabetic = [
+            "1. Maintain a healthy and balanced diet.",
+            "2. Engage in regular physical activity.",
+            "3. Keep stress levels in check.",
+            "4. Get regular check-ups to monitor overall health."
+        ]
+
+        for i, precaution in enumerate(precautions_non_diabetic):
+            Label(master, text=f"Precaution {i + 1}: {precaution}").grid(row=32 + i)
+
+    else:
+        Label(master, text="Diabetic").grid(row=31)
+
+        # Display precautions for diabetic individuals
+        precautions_diabetic = [
+            "1. Follow a strict and well-balanced diabetic diet.",
+            "2. Take prescribed medications as directed by your healthcare provider.",
+            "3. Monitor blood sugar levels regularly.",
+            "4. Engage in regular physical activity under medical supervision.",
+            "5. Attend regular check-ups with your healthcare provider."
+        ]
+
+        for i, precaution in enumerate(precautions_diabetic):
+            Label(master, text=f"Precaution {i + 1}: {precaution}").grid(row=32 + i)
+
+# GUI setup
+master = Tk()
+master.title("Diabetes Prediction Using Machine Learning")
+
+label = Label(master, text="Diabetes Prediction Using Machine Learning", bg="black", fg="white").grid(row=0, columnspan=2)
+
+# Labels and entry fields
+labels = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"]
+entries = [Entry(master) for _ in range(len(labels))]
+
+for i, label in enumerate(labels):
+    Label(master, text=label).grid(row=i + 1)
+    entries[i].grid(row=i + 1, column=1)
+
+# Button for prediction
+Button(master, text='Predict', command=show_entry_fields).grid()
+
+# Start the main loop
+mainloop()
